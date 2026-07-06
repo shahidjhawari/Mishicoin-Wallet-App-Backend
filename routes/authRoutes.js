@@ -3,7 +3,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const { generateUniqueReferralCode } = require("../utils/referralCode");
-const { REFERRAL_SIGNUP_BONUS } = require("../config/constants");
+const { REFERRAL_LEVEL_1_BONUS, REFERRAL_LEVEL_2_BONUS, REFERRAL_LEVEL_3_BONUS } = require("../config/constants");
 
 const router = express.Router();
 
@@ -93,11 +93,32 @@ router.post("/signup", async (req, res) => {
       referredBy: referrer ? referrer._id : null,
     });
 
-    // Reward the referrer immediately for a successful signup
+    // Reward up to 3 levels of the referral chain immediately on signup:
+    // Level 1 = the person whose code was used
+    // Level 2 = that person's own referrer
+    // Level 3 = that person's referrer's referrer
     if (referrer) {
-      referrer.walletBalance += REFERRAL_SIGNUP_BONUS;
-      referrer.referralEarnings += REFERRAL_SIGNUP_BONUS;
+      referrer.walletBalance += REFERRAL_LEVEL_1_BONUS;
+      referrer.referralEarnings += REFERRAL_LEVEL_1_BONUS;
       await referrer.save();
+
+      if (referrer.referredBy) {
+        const level2User = await User.findById(referrer.referredBy);
+        if (level2User) {
+          level2User.walletBalance += REFERRAL_LEVEL_2_BONUS;
+          level2User.referralEarnings += REFERRAL_LEVEL_2_BONUS;
+          await level2User.save();
+
+          if (level2User.referredBy) {
+            const level3User = await User.findById(level2User.referredBy);
+            if (level3User) {
+              level3User.walletBalance += REFERRAL_LEVEL_3_BONUS;
+              level3User.referralEarnings += REFERRAL_LEVEL_3_BONUS;
+              await level3User.save();
+            }
+          }
+        }
+      }
     }
 
     const token = generateToken(user._id);
