@@ -1,12 +1,14 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const path = require("path");
 const connectDB = require("./config/db");
 
 const authRoutes = require("./routes/authRoutes");
 const depositRoutes = require("./routes/depositRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const miningRoutes = require("./routes/miningRoutes");
+const adRoutes = require("./routes/adRoutes");
+const referralRoutes = require("./routes/referralRoutes");
 
 const app = express();
 
@@ -17,9 +19,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve uploaded screenshots statically so the Admin Panel / Android app
-// can load them directly, e.g. http://localhost:5000/uploads/xxx.jpg
-app.use("/uploads", express.static(path.join(__dirname, process.env.UPLOAD_DIR || "uploads")));
+// Deposit screenshots are hosted on Cloudinary now, so no local static
+// file serving is needed — screenshotUrl in the API response is already
+// a full, ready-to-use Cloudinary URL.
 
 // -----------------------------
 // Routes
@@ -27,6 +29,9 @@ app.use("/uploads", express.static(path.join(__dirname, process.env.UPLOAD_DIR |
 app.use("/api/auth", authRoutes);
 app.use("/api/deposit", depositRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/mining", miningRoutes);
+app.use("/api/ads", adRoutes);
+app.use("/api/referral", referralRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "Mishicoin API is running" });

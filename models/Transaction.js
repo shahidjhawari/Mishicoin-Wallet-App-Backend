@@ -18,8 +18,14 @@ const TransactionSchema = new mongoose.Schema(
       trim: true,
     },
     screenshotUrl: {
+      // Cloudinary secure_url
       type: String,
       required: true,
+    },
+    screenshotPublicId: {
+      // Cloudinary public_id, kept so the image can be moderated/removed later
+      type: String,
+      default: null,
     },
     mobileNumber: {
       type: String,

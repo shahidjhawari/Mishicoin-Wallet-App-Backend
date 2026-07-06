@@ -24,13 +24,17 @@ router.post("/", protect, upload.single("screenshot"), async (req, res) => {
       return res.status(400).json({ message: "Screenshot image file is required" });
     }
 
-    const screenshotUrl = `${process.env.BASE_URL || ""}/uploads/${req.file.filename}`;
+    // multer-storage-cloudinary puts the uploaded image's secure URL on
+    // req.file.path, and the Cloudinary public_id on req.file.filename
+    const screenshotUrl = req.file.path;
+    const screenshotPublicId = req.file.filename;
 
     const transaction = await Transaction.create({
       user: req.user._id,
       amount: Number(amount),
       transactionId: txn_id,
       screenshotUrl,
+      screenshotPublicId,
       mobileNumber: mobile_number,
       paymentMethod: payment_method,
       status: "Pending",

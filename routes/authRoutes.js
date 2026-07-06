@@ -1,13 +1,12 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const { OAuth2Client } = require("google-auth-library");
 const User = require("../models/User");
+const { generateUniqueReferralCode } = require("../utils/referralCode");
+const { REFERRAL_SIGNUP_BONUS } = require("../config/constants");
 
 const router = express.Router();
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-// Helper to sign a JWT for a given user id
 const generateToken = (userId) => {
   return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || "30d",
@@ -17,36 +16,89 @@ const generateToken = (userId) => {
 // Shape a consistent user object to send back to clients
 const sanitizeUser = (user) => ({
   id: user._id,
-  name: user.name,
+  nameOnCnic: user.nameOnCnic,
+  cityOnCnic: user.cityOnCnic,
+  username: user.username,
   email: user.email,
+  mobileNumber: user.mobileNumber,
   walletBalance: user.walletBalance,
   status: user.status,
   role: user.role,
+  isMining: user.isMining,
+  miningStartedAt: user.miningStartedAt,
+  totalMined: user.totalMined,
+  referralCode: user.referralCode,
+  referralEarnings: user.referralEarnings,
 });
 
 // -----------------------------
 // POST /api/auth/signup
+// Body: { nameOnCnic, username, email, mobileNumber, cityOnCnic, password, referralCode? }
 // -----------------------------
 router.post("/signup", async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const {
+      nameOnCnic,
+      username,
+      email,
+      mobileNumber,
+      cityOnCnic,
+      password,
+      referralCode, // optional: another user's referral code entered at signup
+    } = req.body;
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: "Name, email and password are required" });
+    if (!nameOnCnic || !username || !email || !mobileNumber || !cityOnCnic || !password) {
+      return res.status(400).json({
+        message:
+          "nameOnCnic, username, email, mobileNumber, cityOnCnic and password are all required",
+      });
     }
 
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (password.length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters" });
+    }
+
+    const normalizedUsername = username.toLowerCase().trim();
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const existingUser = await User.findOne({
+      $or: [{ username: normalizedUsername }, { email: normalizedEmail }],
+    });
+
     if (existingUser) {
-      return res.status(409).json({ message: "Email is already registered" });
+      const field = existingUser.username === normalizedUsername ? "Username" : "Email";
+      return res.status(409).json({ message: `${field} is already taken` });
+    }
+
+    // Resolve an optional referrer from the referral code they entered
+    let referrer = null;
+    if (referralCode) {
+      referrer = await User.findOne({ referralCode: referralCode.toUpperCase().trim() });
+      if (!referrer) {
+        return res.status(400).json({ message: "Invalid referral code" });
+      }
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const newReferralCode = await generateUniqueReferralCode();
 
     const user = await User.create({
-      name,
-      email: email.toLowerCase(),
+      nameOnCnic,
+      username: normalizedUsername,
+      email: normalizedEmail,
+      mobileNumber,
+      cityOnCnic,
       password: hashedPassword,
+      referralCode: newReferralCode,
+      referredBy: referrer ? referrer._id : null,
     });
+
+    // Reward the referrer immediately for a successful signup
+    if (referrer) {
+      referrer.walletBalance += REFERRAL_SIGNUP_BONUS;
+      referrer.referralEarnings += REFERRAL_SIGNUP_BONUS;
+      await referrer.save();
+    }
 
     const token = generateToken(user._id);
 
@@ -63,18 +115,22 @@ router.post("/signup", async (req, res) => {
 
 // -----------------------------
 // POST /api/auth/login
+// Body: { username, password }
 // -----------------------------
 router.post("/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { username, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ message: "Email and password are required" });
+    if (!username || !password) {
+      return res.status(400).json({ message: "Username and password are required" });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() }).select("+password");
-    if (!user || !user.password) {
-      return res.status(401).json({ message: "Invalid email or password" });
+    const user = await User.findOne({ username: username.toLowerCase().trim() }).select(
+      "+password"
+    );
+
+    if (!user) {
+      return res.status(401).json({ message: "Invalid username or password" });
     }
 
     if (user.status === "blocked") {
@@ -83,7 +139,7 @@ router.post("/login", async (req, res) => {
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res.status(401).json({ message: "Invalid username or password" });
     }
 
     const token = generateToken(user._id);
@@ -96,56 +152,6 @@ router.post("/login", async (req, res) => {
   } catch (error) {
     console.error("Login error:", error);
     return res.status(500).json({ message: "Server error during login" });
-  }
-});
-
-// -----------------------------
-// POST /api/auth/google
-// Body: { idToken: "<Google ID token from Android/Web client>" }
-// -----------------------------
-router.post("/google", async (req, res) => {
-  try {
-    const { idToken } = req.body;
-
-    if (!idToken) {
-      return res.status(400).json({ message: "idToken is required" });
-    }
-
-    const ticket = await googleClient.verifyIdToken({
-      idToken,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
-
-    const payload = ticket.getPayload();
-    const { sub: googleId, email, name } = payload;
-
-    let user = await User.findOne({ email: email.toLowerCase() });
-
-    if (!user) {
-      user = await User.create({
-        name,
-        email: email.toLowerCase(),
-        googleId,
-      });
-    } else if (!user.googleId) {
-      user.googleId = googleId;
-      await user.save();
-    }
-
-    if (user.status === "blocked") {
-      return res.status(403).json({ message: "Your account has been blocked" });
-    }
-
-    const token = generateToken(user._id);
-
-    return res.status(200).json({
-      message: "Google sign-in successful",
-      token,
-      user: sanitizeUser(user),
-    });
-  } catch (error) {
-    console.error("Google auth error:", error);
-    return res.status(401).json({ message: "Invalid Google token" });
   }
 });
 
