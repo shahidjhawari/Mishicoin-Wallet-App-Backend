@@ -1,11 +1,7 @@
 const express = require("express");
 const User = require("../models/User");
 const { protect } = require("../middleware/auth");
-const {
-  REFERRAL_LEVEL_1_BONUS,
-  REFERRAL_LEVEL_2_BONUS,
-  REFERRAL_LEVEL_3_BONUS,
-} = require("../config/constants");
+const { getSettings } = require("../services/settingsService");
 
 const router = express.Router();
 
@@ -16,6 +12,8 @@ const router = express.Router();
 // -----------------------------
 router.get("/my-info", protect, async (req, res) => {
   try {
+    const settings = await getSettings();
+
     // Level 1: people who signed up directly with this user's code
     const level1Users = await User.find({ referredBy: req.user._id })
       .select("username nameOnCnic createdAt")
@@ -37,9 +35,9 @@ router.get("/my-info", protect, async (req, res) => {
       referralCode: req.user.referralCode,
       referralLink: `${process.env.APP_SHARE_BASE_URL || "https://mishicoin.app/r"}/${req.user.referralCode}`,
       bonusPerLevel: {
-        level1: REFERRAL_LEVEL_1_BONUS,
-        level2: REFERRAL_LEVEL_2_BONUS,
-        level3: REFERRAL_LEVEL_3_BONUS,
+        level1: settings.referralLevel1Bonus,
+        level2: settings.referralLevel2Bonus,
+        level3: settings.referralLevel3Bonus,
       },
       totalReferred: level1Users.length + level2Users.length + level3Users.length,
       referralEarnings: req.user.referralEarnings,

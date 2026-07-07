@@ -1,6 +1,6 @@
 const express = require("express");
 const { protect } = require("../middleware/auth");
-const { AD_REWARD_AMOUNT, AD_DAILY_LIMIT } = require("../config/constants");
+const { getSettings } = require("../services/settingsService");
 
 const router = express.Router();
 
@@ -14,31 +14,31 @@ const todayKey = () => new Date().toISOString().slice(0, 10);
 router.post("/watch", protect, async (req, res) => {
   try {
     const user = req.user;
+    const settings = await getSettings();
     const today = todayKey();
 
-    // Reset the daily counter if this is the first ad watched today
     if (user.lastAdWatchDate !== today) {
       user.adsWatchedToday = 0;
       user.lastAdWatchDate = today;
     }
 
-    if (user.adsWatchedToday >= AD_DAILY_LIMIT) {
+    if (user.adsWatchedToday >= settings.adDailyLimit) {
       return res.status(400).json({
-        message: `Daily ad limit reached (${AD_DAILY_LIMIT}/day). Come back tomorrow.`,
+        message: `Daily ad limit reached (${settings.adDailyLimit}/day). Come back tomorrow.`,
         adsWatchedToday: user.adsWatchedToday,
-        dailyLimit: AD_DAILY_LIMIT,
+        dailyLimit: settings.adDailyLimit,
       });
     }
 
     user.adsWatchedToday += 1;
-    user.walletBalance += AD_REWARD_AMOUNT;
+    user.walletBalance += settings.adRewardAmount;
     await user.save();
 
     return res.status(200).json({
       message: "Reward credited",
-      reward: AD_REWARD_AMOUNT,
+      reward: settings.adRewardAmount,
       adsWatchedToday: user.adsWatchedToday,
-      dailyLimit: AD_DAILY_LIMIT,
+      dailyLimit: settings.adDailyLimit,
       walletBalance: user.walletBalance,
     });
   } catch (error) {
@@ -49,19 +49,19 @@ router.post("/watch", protect, async (req, res) => {
 
 // -----------------------------
 // GET /api/ads/status
-// Lets the app show "x/20 ads watched today" before the user taps watch.
 // -----------------------------
 router.get("/status", protect, async (req, res) => {
   try {
     const user = req.user;
+    const settings = await getSettings();
     const today = todayKey();
     const adsWatchedToday = user.lastAdWatchDate === today ? user.adsWatchedToday : 0;
 
     return res.status(200).json({
       adsWatchedToday,
-      dailyLimit: AD_DAILY_LIMIT,
-      rewardPerAd: AD_REWARD_AMOUNT,
-      remainingToday: Math.max(0, AD_DAILY_LIMIT - adsWatchedToday),
+      dailyLimit: settings.adDailyLimit,
+      rewardPerAd: settings.adRewardAmount,
+      remainingToday: Math.max(0, settings.adDailyLimit - adsWatchedToday),
     });
   } catch (error) {
     console.error("Ad status error:", error);

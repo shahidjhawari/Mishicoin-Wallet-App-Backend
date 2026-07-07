@@ -5,6 +5,7 @@ const connectDB = require("./config/db");
 
 const authRoutes = require("./routes/authRoutes");
 const depositRoutes = require("./routes/depositRoutes");
+const withdrawRoutes = require("./routes/withdrawRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const miningRoutes = require("./routes/miningRoutes");
 const adRoutes = require("./routes/adRoutes");
@@ -28,6 +29,7 @@ app.use(express.urlencoded({ extended: true }));
 // -----------------------------
 app.use("/api/auth", authRoutes);
 app.use("/api/deposit", depositRoutes);
+app.use("/api/withdraw", withdrawRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/mining", miningRoutes);
 app.use("/api/ads", adRoutes);

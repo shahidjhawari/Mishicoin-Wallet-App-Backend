@@ -1,34 +1,42 @@
 const express = require("express");
 const { protect } = require("../middleware/auth");
-const { MINING_SESSION_HOURS, MINING_RATE_PER_HOUR } = require("../config/constants");
+const { getSettings } = require("../services/settingsService");
 
 const router = express.Router();
 
-const SESSION_MS = MINING_SESSION_HOURS * 60 * 60 * 1000;
-const FULL_SESSION_REWARD = MINING_SESSION_HOURS * MINING_RATE_PER_HOUR;
-
-// Computes how much of the current mining session has elapsed/earned
-const computeProgress = (miningStartedAt) => {
+// Computes how much of the current mining session has elapsed/earned,
+// using whatever session length/rate is currently set in Settings.
+const computeProgress = (miningStartedAt, sessionHours, ratePerHour) => {
+  const sessionMs = sessionHours * 60 * 60 * 1000;
   const elapsedMs = Date.now() - new Date(miningStartedAt).getTime();
-  const cappedMs = Math.min(elapsedMs, SESSION_MS);
+  const cappedMs = Math.min(elapsedMs, sessionMs);
   const elapsedHours = cappedMs / (60 * 60 * 1000);
-  const earnedSoFar = Number((elapsedHours * MINING_RATE_PER_HOUR).toFixed(4));
-  const isComplete = elapsedMs >= SESSION_MS;
-  const remainingMs = Math.max(0, SESSION_MS - elapsedMs);
+  const earnedSoFar = Number((elapsedHours * ratePerHour).toFixed(4));
+  const isComplete = elapsedMs >= sessionMs;
+  const remainingMs = Math.max(0, sessionMs - elapsedMs);
 
-  return { earnedSoFar, isComplete, remainingMs, progressPercent: Math.min(100, (elapsedMs / SESSION_MS) * 100) };
+  return {
+    earnedSoFar,
+    isComplete,
+    remainingMs,
+    progressPercent: Math.min(100, (elapsedMs / sessionMs) * 100),
+  };
 };
 
 // -----------------------------
 // POST /api/mining/start
-// Starts a new mining session for the logged-in user.
 // -----------------------------
 router.post("/start", protect, async (req, res) => {
   try {
     const user = req.user;
+    const settings = await getSettings();
 
     if (user.isMining) {
-      const { isComplete } = computeProgress(user.miningStartedAt);
+      const { isComplete } = computeProgress(
+        user.miningStartedAt,
+        settings.miningSessionHours,
+        settings.miningRatePerHour
+      );
       if (!isComplete) {
         return res.status(400).json({
           message: "A mining session is already in progress. Wait for it to complete.",
@@ -46,9 +54,9 @@ router.post("/start", protect, async (req, res) => {
     return res.status(200).json({
       message: "Mining started",
       miningStartedAt: user.miningStartedAt,
-      sessionHours: MINING_SESSION_HOURS,
-      ratePerHour: MINING_RATE_PER_HOUR,
-      fullSessionReward: FULL_SESSION_REWARD,
+      sessionHours: settings.miningSessionHours,
+      ratePerHour: settings.miningRatePerHour,
+      fullSessionReward: settings.miningSessionHours * settings.miningRatePerHour,
     });
   } catch (error) {
     console.error("Mining start error:", error);
@@ -58,11 +66,11 @@ router.post("/start", protect, async (req, res) => {
 
 // -----------------------------
 // GET /api/mining/status
-// Returns the current session's progress without changing anything.
 // -----------------------------
 router.get("/status", protect, async (req, res) => {
   try {
     const user = req.user;
+    const settings = await getSettings();
 
     if (!user.isMining) {
       return res.status(200).json({
@@ -73,14 +81,18 @@ router.get("/status", protect, async (req, res) => {
       });
     }
 
-    const progress = computeProgress(user.miningStartedAt);
+    const progress = computeProgress(
+      user.miningStartedAt,
+      settings.miningSessionHours,
+      settings.miningRatePerHour
+    );
 
     return res.status(200).json({
       isMining: true,
       miningStartedAt: user.miningStartedAt,
-      sessionHours: MINING_SESSION_HOURS,
-      ratePerHour: MINING_RATE_PER_HOUR,
-      fullSessionReward: FULL_SESSION_REWARD,
+      sessionHours: settings.miningSessionHours,
+      ratePerHour: settings.miningRatePerHour,
+      fullSessionReward: settings.miningSessionHours * settings.miningRatePerHour,
       earnedSoFar: progress.earnedSoFar,
       progressPercent: Number(progress.progressPercent.toFixed(2)),
       remainingSeconds: Math.ceil(progress.remainingMs / 1000),
@@ -96,17 +108,21 @@ router.get("/status", protect, async (req, res) => {
 
 // -----------------------------
 // POST /api/mining/claim
-// Credits the finished session's reward to the wallet and resets state.
 // -----------------------------
 router.post("/claim", protect, async (req, res) => {
   try {
     const user = req.user;
+    const settings = await getSettings();
 
     if (!user.isMining) {
       return res.status(400).json({ message: "No active mining session to claim" });
     }
 
-    const progress = computeProgress(user.miningStartedAt);
+    const progress = computeProgress(
+      user.miningStartedAt,
+      settings.miningSessionHours,
+      settings.miningRatePerHour
+    );
 
     if (!progress.isComplete) {
       return res.status(400).json({
@@ -115,7 +131,7 @@ router.post("/claim", protect, async (req, res) => {
       });
     }
 
-    const reward = FULL_SESSION_REWARD;
+    const reward = settings.miningSessionHours * settings.miningRatePerHour;
 
     user.walletBalance += reward;
     user.totalMined += reward;

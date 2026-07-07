@@ -8,8 +8,9 @@ const cloudinary = require("../config/cloudinary");
 const storage = new CloudinaryStorage({
   cloudinary,
   params: async (req, file) => ({
-    folder: "mishicoin/deposits",
+    folder: process.env.CLOUDINARY_FOLDER || "mishicoin/deposits",
     resource_type: "image",
+    allowed_formats: ["jpg", "jpeg", "png", "webp"],
     // Keep files organized and traceable back to the uploading user
     public_id: `${req.user?._id || "anon"}-${Date.now()}`,
     transformation: [{ width: 1200, height: 1200, crop: "limit", quality: "auto" }],

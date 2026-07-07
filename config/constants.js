@@ -14,4 +14,7 @@ module.exports = {
   REFERRAL_LEVEL_1_BONUS: Number(process.env.REFERRAL_LEVEL_1_BONUS || 5), // direct invite
   REFERRAL_LEVEL_2_BONUS: Number(process.env.REFERRAL_LEVEL_2_BONUS || 2), // invite of your invite
   REFERRAL_LEVEL_3_BONUS: Number(process.env.REFERRAL_LEVEL_3_BONUS || 1), // 3rd level down
+
+  // Withdrawals
+  MIN_WITHDRAWAL_AMOUNT: Number(process.env.MIN_WITHDRAWAL_AMOUNT || 50), // coins
 };
