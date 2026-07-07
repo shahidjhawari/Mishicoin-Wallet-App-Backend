@@ -8,9 +8,8 @@ const cloudinary = require("../config/cloudinary");
 const storage = new CloudinaryStorage({
   cloudinary,
   params: async (req, file) => ({
-    folder: process.env.CLOUDINARY_FOLDER || "mishicoin/deposits",
+    folder: "mc",
     resource_type: "image",
-    allowed_formats: ["jpg", "jpeg", "png", "webp"],
     // Keep files organized and traceable back to the uploading user
     public_id: `${req.user?._id || "anon"}-${Date.now()}`,
     transformation: [{ width: 1200, height: 1200, crop: "limit", quality: "auto" }],
@@ -18,11 +17,10 @@ const storage = new CloudinaryStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  const allowedMimeTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-  if (allowedMimeTypes.includes(file.mimetype)) {
+  if (file.mimetype && file.mimetype.startsWith("image/")) {
     cb(null, true);
   } else {
-    cb(new Error("Only image files (jpg, jpeg, png, webp) are allowed"), false);
+    cb(new Error("Only image files are allowed"), false);
   }
 };
 
