@@ -1,6 +1,7 @@
 const express = require("express");
 const { protect } = require("../middleware/auth");
 const { getSettings } = require("../services/settingsService");
+const Earning = require("../models/Earning");
 
 const router = express.Router();
 
@@ -139,6 +140,14 @@ router.post("/claim", protect, async (req, res) => {
     user.miningStartedAt = null;
     user.lastClaimedAt = new Date();
     await user.save();
+
+    await Earning.create({
+      user: user._id,
+      type: "Mining",
+      amount: reward,
+      description: `Mining session reward (${settings.miningSessionHours}h @ $${settings.miningRatePerHour}/h)`,
+      balanceAfter: user.walletBalance,
+    });
 
     return res.status(200).json({
       message: "Mining reward claimed",

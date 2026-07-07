@@ -2,6 +2,7 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const Earning = require("../models/Earning");
 const { generateUniqueReferralCode } = require("../utils/referralCode");
 const { getSettings } = require("../services/settingsService");
 const sanitizeUser = require("../utils/sanitizeUser");
@@ -87,6 +88,13 @@ router.post("/signup", async (req, res) => {
       referrer.walletBalance += settings.referralLevel1Bonus;
       referrer.referralEarnings += settings.referralLevel1Bonus;
       await referrer.save();
+      await Earning.create({
+        user: referrer._id,
+        type: "ReferralBonus",
+        amount: settings.referralLevel1Bonus,
+        description: `Level 1 referral bonus — ${user.username} joined using your code`,
+        balanceAfter: referrer.walletBalance,
+      });
 
       if (referrer.referredBy) {
         const level2User = await User.findById(referrer.referredBy);
@@ -94,6 +102,13 @@ router.post("/signup", async (req, res) => {
           level2User.walletBalance += settings.referralLevel2Bonus;
           level2User.referralEarnings += settings.referralLevel2Bonus;
           await level2User.save();
+          await Earning.create({
+            user: level2User._id,
+            type: "ReferralBonus",
+            amount: settings.referralLevel2Bonus,
+            description: `Level 2 referral bonus — ${user.username} joined via your network`,
+            balanceAfter: level2User.walletBalance,
+          });
 
           if (level2User.referredBy) {
             const level3User = await User.findById(level2User.referredBy);
@@ -101,6 +116,13 @@ router.post("/signup", async (req, res) => {
               level3User.walletBalance += settings.referralLevel3Bonus;
               level3User.referralEarnings += settings.referralLevel3Bonus;
               await level3User.save();
+              await Earning.create({
+                user: level3User._id,
+                type: "ReferralBonus",
+                amount: settings.referralLevel3Bonus,
+                description: `Level 3 referral bonus — ${user.username} joined via your network`,
+                balanceAfter: level3User.walletBalance,
+              });
             }
           }
         }

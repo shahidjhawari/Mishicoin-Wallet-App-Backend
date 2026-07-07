@@ -1,6 +1,7 @@
 const express = require("express");
 const { protect } = require("../middleware/auth");
 const { getSettings } = require("../services/settingsService");
+const Earning = require("../models/Earning");
 
 const router = express.Router();
 
@@ -33,6 +34,14 @@ router.post("/watch", protect, async (req, res) => {
     user.adsWatchedToday += 1;
     user.walletBalance += settings.adRewardAmount;
     await user.save();
+
+    await Earning.create({
+      user: user._id,
+      type: "AdReward",
+      amount: settings.adRewardAmount,
+      description: "Watched a rewarded ad",
+      balanceAfter: user.walletBalance,
+    });
 
     return res.status(200).json({
       message: "Reward credited",

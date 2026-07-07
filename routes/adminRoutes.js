@@ -2,6 +2,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const Transaction = require("../models/Transaction");
 const Withdrawal = require("../models/Withdrawal");
+const Earning = require("../models/Earning");
 const User = require("../models/User");
 const { protect, adminOnly } = require("../middleware/auth");
 const { getSettings, updateSettings } = require("../services/settingsService");
@@ -208,6 +209,71 @@ router.put("/reject-withdrawal/:id", async (req, res) => {
     return res.status(500).json({ message: "Server error while rejecting withdrawal" });
   } finally {
     session.endSession();
+  }
+});
+
+// =====================================================
+// WALLET HISTORY (deposits + withdrawals + earnings combined)
+// =====================================================
+
+const mapDeposit = (t) => ({
+  id: t._id,
+  category: "Deposit",
+  type: "Deposit",
+  amount: t.amount,
+  status: t.status,
+  description: `Deposit via ${t.paymentMethod} (Txn ID: ${t.transactionId})`,
+  date: t.createdAt,
+  user: t.user,
+});
+
+const mapWithdrawal = (w) => ({
+  id: w._id,
+  category: "Withdrawal",
+  type: "Withdrawal",
+  amount: -w.amount,
+  status: w.status,
+  description: `Withdrawal to ${w.paymentMethod} (${w.accountNumber})`,
+  date: w.createdAt,
+  user: w.user,
+});
+
+const mapEarning = (e) => ({
+  id: e._id,
+  category: "Earning",
+  type: e.type,
+  amount: e.amount,
+  status: "Completed",
+  description: e.description,
+  date: e.createdAt,
+  user: e.user,
+});
+
+// GET /api/admin/wallet-history
+// Optional query param: ?userId=<id> to see just one user's full history.
+// Without it, returns every user's history (most recent first) — useful
+// as an "all transactions" audit log.
+router.get("/wallet-history", async (req, res) => {
+  try {
+    const { userId } = req.query;
+    const filter = userId ? { user: userId } : {};
+
+    const [deposits, withdrawals, earnings] = await Promise.all([
+      Transaction.find(filter).populate("user", "username email nameOnCnic").sort({ createdAt: -1 }),
+      Withdrawal.find(filter).populate("user", "username email nameOnCnic").sort({ createdAt: -1 }),
+      Earning.find(filter).populate("user", "username email nameOnCnic").sort({ createdAt: -1 }),
+    ]);
+
+    const combined = [
+      ...deposits.map(mapDeposit),
+      ...withdrawals.map(mapWithdrawal),
+      ...earnings.map(mapEarning),
+    ].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    return res.status(200).json({ transactions: combined });
+  } catch (error) {
+    console.error("Admin wallet history error:", error);
+    return res.status(500).json({ message: "Server error while fetching wallet history" });
   }
 });
 
