@@ -4,6 +4,7 @@ const cors = require("cors");
 const connectDB = require("./config/db");
 
 const authRoutes = require("./routes/authRoutes");
+const userRoutes = require("./routes/userRoutes");
 const depositRoutes = require("./routes/depositRoutes");
 const withdrawRoutes = require("./routes/withdrawRoutes");
 const adminRoutes = require("./routes/adminRoutes");
@@ -28,6 +29,7 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 // -----------------------------
 app.use("/api/auth", authRoutes);
+app.use("/api/user", userRoutes);
 app.use("/api/deposit", depositRoutes);
 app.use("/api/withdraw", withdrawRoutes);
 app.use("/api/admin", adminRoutes);

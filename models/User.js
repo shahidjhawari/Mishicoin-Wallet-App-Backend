@@ -41,6 +41,12 @@ const UserSchema = new mongoose.Schema(
       select: false,
     },
 
+    // Profile picture (Cloudinary secure_url)
+    profileImageUrl: {
+      type: String,
+      default: null,
+    },
+
     // Wallet
     walletBalance: {
       type: Number,

@@ -32,7 +32,7 @@ router.post("/", protect, async (req, res) => {
 
     if (numericAmount < settings.minWithdrawalAmount) {
       return res.status(400).json({
-        message: `Minimum withdrawal amount is ${settings.minWithdrawalAmount} coins`,
+        message: `Minimum withdrawal amount is $${settings.minWithdrawalAmount}`,
         minWithdrawalAmount: settings.minWithdrawalAmount,
       });
     }

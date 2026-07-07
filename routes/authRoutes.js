@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const { generateUniqueReferralCode } = require("../utils/referralCode");
 const { getSettings } = require("../services/settingsService");
+const sanitizeUser = require("../utils/sanitizeUser");
 
 const router = express.Router();
 
@@ -13,23 +14,6 @@ const generateToken = (userId) => {
   });
 };
 
-// Shape a consistent user object to send back to clients
-const sanitizeUser = (user) => ({
-  id: user._id,
-  nameOnCnic: user.nameOnCnic,
-  cityOnCnic: user.cityOnCnic,
-  username: user.username,
-  email: user.email,
-  mobileNumber: user.mobileNumber,
-  walletBalance: user.walletBalance,
-  status: user.status,
-  role: user.role,
-  isMining: user.isMining,
-  miningStartedAt: user.miningStartedAt,
-  totalMined: user.totalMined,
-  referralCode: user.referralCode,
-  referralEarnings: user.referralEarnings,
-});
 
 // -----------------------------
 // POST /api/auth/signup
